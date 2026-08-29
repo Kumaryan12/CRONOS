@@ -19,6 +19,11 @@ public final class CollectorCoordinator {
     private let onSnapshot: (Snapshot) -> Void
     private let onEvent: (ActivityEvent) -> Void
     private let onSession: (ActivitySession) -> Void
+    private let onProcessed: (
+        ActivityEvent,
+        [ActivitySession],
+        SessionReconstructor.ActiveApplication?
+    ) -> Void
 
     private lazy var applicationTracker = ApplicationTracker(handler: handle)
     private lazy var idleTracker = IdleTracker(handler: handle)
@@ -29,16 +34,25 @@ public final class CollectorCoordinator {
     public init(
         onSnapshot: @escaping (Snapshot) -> Void = { _ in },
         onEvent: @escaping (ActivityEvent) -> Void = { _ in },
-        onSession: @escaping (ActivitySession) -> Void = { _ in }
+        onSession: @escaping (ActivitySession) -> Void = { _ in },
+        onProcessed: @escaping (
+            ActivityEvent,
+            [ActivitySession],
+            SessionReconstructor.ActiveApplication?
+        ) -> Void = { _, _, _ in }
     ) {
         self.onSnapshot = onSnapshot
         self.onEvent = onEvent
         self.onSession = onSession
+        self.onProcessed = onProcessed
     }
 
     public func start() {
         guard !snapshot.isTracking else { return }
-        snapshot.isTracking = true
+        handle(ActivityEvent(
+            type: .trackingResumed,
+            metadata: ["reason": "collector_started"]
+        ))
         applicationTracker.start()
         screenTracker.start()
         sessionTracker.start()
@@ -49,13 +63,14 @@ public final class CollectorCoordinator {
 
     public func stop() {
         guard snapshot.isTracking else { return }
+        handle(ActivityEvent(
+            type: .trackingPaused,
+            metadata: ["reason": "collector_stopped"]
+        ))
         applicationTracker.stop()
         screenTracker.stop()
         sessionTracker.stop()
         idleTracker.stop()
-        if let session = reconstructor.stop() {
-            onSession(session)
-        }
         snapshot = Snapshot()
         publish()
         logger.info("Collector stopped")
@@ -71,8 +86,13 @@ public final class CollectorCoordinator {
     }
 
     private func handle(_ event: ActivityEvent) {
+        // Pause is a privacy boundary: do not retain even coarse events until the
+        // user explicitly resumes tracking.
+        guard snapshot.isTracking || event.type == .trackingResumed else { return }
         onEvent(event)
-        reconstructor.process(event).forEach(onSession)
+        let sessions = reconstructor.process(event)
+        sessions.forEach(onSession)
+        onProcessed(event, sessions, reconstructor.activeApplication)
 
         switch event.type {
         case .appActivated:

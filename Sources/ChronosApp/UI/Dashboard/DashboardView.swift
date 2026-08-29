@@ -32,6 +32,11 @@ struct DashboardView: View {
                     .padding(.vertical, 8)
                 }
 
+                if let persistenceError = model.persistenceError {
+                    Label(persistenceError, systemImage: "externaldrive.badge.exclamationmark")
+                        .foregroundStyle(.red)
+                }
+
                 Text("Recent completed sessions")
                     .font(.headline)
                 List(model.recentSessions) { session in

@@ -5,6 +5,12 @@ public struct SessionReconstructor: Sendable {
         public let bundleID: String
         public let name: String
         public let startedAt: Date
+
+        public init(bundleID: String, name: String, startedAt: Date) {
+            self.bundleID = bundleID
+            self.name = name
+            self.startedAt = startedAt
+        }
     }
 
     public private(set) var activeApplication: ActiveApplication?

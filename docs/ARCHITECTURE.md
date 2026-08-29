@@ -43,8 +43,9 @@ There is no per-second activity sampling.
 
 Events use UTC `Date` values. Calendar-aware aggregation splits sessions at
 local day boundaries. A session is written only when its ending transition is
-known. On restart, open sessions are marked interrupted; Chronos does not infer
-activity across a crash.
+known. A transactional collector checkpoint stores the active session and its
+last observed event. On restart, recovery ends it at that observation, marks it
+uncertain, and never infers activity across the crash-to-restart gap.
 
 ## Extension points
 

@@ -24,7 +24,10 @@ struct MenuBarView: View {
                 model.toggleTracking()
             }
             Divider()
-            Button("Quit Chronos") { NSApplication.shared.terminate(nil) }
+            Button("Quit Chronos") {
+                model.shutdown()
+                NSApplication.shared.terminate(nil)
+            }
         }
         .padding(14)
         .frame(width: 300)

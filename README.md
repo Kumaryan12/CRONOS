@@ -12,8 +12,9 @@ screenshots, keystrokes, shame, or a required cloud account.
 
 ## Current milestone
 
-The repository contains the native Swift package architecture for the collector,
-core analytics, menu-bar app, SQLite storage, developer utility, and tests.
+Milestones 0–2 provide the native package architecture, a working event-driven
+collector, conservative session reconstruction, versioned SQLite persistence,
+crash checkpoints, a live menu-bar diagnostic view, and tests.
 
 ## Architecture and privacy
 
@@ -39,10 +40,12 @@ optional enhanced mode may request additional permission only after explaining i
 swift build
 swift test
 swift run ChronosApp
+swift run chronos-dev self-test
 ```
 
-Run `swift run chronos-dev generate --days 30 --seed 42` to create deterministic
-sample history once the data-generator milestone is enabled.
+`chronos-dev self-test` verifies reconstruction, migration, transactional writes,
+and reads without launching the UI. Fake-history generation arrives with the
+analytics milestone.
 
 ## Roadmap
 
