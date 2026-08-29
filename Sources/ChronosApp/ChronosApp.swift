@@ -26,6 +26,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var persistenceError: String?
     @Published private(set) var launchAtLogin = false
     @Published private(set) var lifecycleError: String?
+    @Published private(set) var dailyAnalytics = DailyAnalytics.empty(
+        for: Calendar.current.dateInterval(of: .day, for: Date())!
+    )
 
     private let store: ActivityStore?
     private var terminationObserver: NSObjectProtocol?
@@ -47,6 +50,7 @@ final class AppModel: ObservableObject {
                     completedSessions: sessions,
                     activeApplication: activeApplication
                 )
+                if !sessions.isEmpty { self?.refreshDailyAnalytics() }
             } catch {
                 self?.persistenceError = String(describing: error)
             }
@@ -70,6 +74,7 @@ final class AppModel: ObservableObject {
         store = initializedStore
         persistenceError = initializationError
         if let recoveredSession { recentSessions = [recoveredSession] }
+        refreshDailyAnalytics()
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -121,6 +126,21 @@ final class AppModel: ObservableObject {
         } catch {
             launchAtLogin = LoginItemManager.isEnabled
             lifecycleError = String(describing: error)
+        }
+    }
+
+    private func refreshDailyAnalytics(now: Date = Date()) {
+        guard let interval = Calendar.current.dateInterval(of: .day, for: now),
+              let store else { return }
+        do {
+            let sessions = try store.sessions(from: interval.start, to: interval.end)
+            dailyAnalytics = DailyAnalyticsEngine().analyze(
+                sessions: sessions,
+                interval: interval
+            )
+            recentSessions = Array(sessions.suffix(20).reversed())
+        } catch {
+            persistenceError = String(describing: error)
         }
     }
 }

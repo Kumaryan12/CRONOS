@@ -1,3 +1,5 @@
+import Charts
+import ChronosCore
 import SwiftUI
 
 struct DashboardView: View {
@@ -31,6 +33,14 @@ struct DashboardView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                HStack(spacing: 12) {
+                    metricCard("ACTIVE", duration(model.dailyAnalytics.activeDuration), "clock")
+                    metricCard("PRODUCTIVE", duration(model.dailyAnalytics.productiveDuration), "hammer")
+                    metricCard("DISTRACTION", duration(model.dailyAnalytics.distractionDuration), "sparkles.tv")
+                    metricCard("FOCUS SCORE", model.dailyAnalytics.focusScore.map { "\($0.score)" } ?? "—", "scope")
+                    metricCard("SWITCHES", "\(model.dailyAnalytics.contextSwitches)", "arrow.left.arrow.right")
+                }
+
                 GroupBox("Collector status") {
                     Grid(alignment: .leading, horizontalSpacing: 32, verticalSpacing: 12) {
                         GridRow { Text("Application"); Text(model.snapshot.currentApplication ?? "None") }
@@ -45,6 +55,21 @@ struct DashboardView: View {
                 if let persistenceError = model.persistenceError {
                     Label(persistenceError, systemImage: "externaldrive.badge.exclamationmark")
                         .foregroundStyle(.red)
+                }
+
+                if !model.dailyAnalytics.categories.isEmpty {
+                    GroupBox("Where today went") {
+                        Chart(model.dailyAnalytics.categories.prefix(7)) { item in
+                            BarMark(
+                                x: .value("Hours", item.duration / 3600),
+                                y: .value("Category", item.category.name)
+                            )
+                            .foregroundStyle(color(for: item.category.classification))
+                        }
+                        .chartXAxisLabel("hours")
+                        .frame(height: 180)
+                        .padding(.vertical, 8)
+                    }
                 }
 
                 Text("Recent completed sessions")
@@ -62,6 +87,41 @@ struct DashboardView: View {
                 }
             }
             .padding(28)
+        }
+    }
+
+    private func metricCard(_ title: String, _ value: String, _ systemImage: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.title2.weight(.semibold))
+                .monospacedDigit()
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func duration(_ seconds: TimeInterval) -> String {
+        let units: Set<Duration.UnitsFormatStyle.Unit> = seconds >= 3600
+            ? [.hours, .minutes]
+            : [.minutes]
+        return Duration.seconds(seconds).formatted(.units(
+            allowed: units,
+            width: .abbreviated,
+            maximumUnitCount: 2
+        ))
+    }
+
+    private func color(for classification: CategoryClassification) -> Color {
+        switch classification {
+        case .productive: return .blue
+        case .neutral: return .gray
+        case .distraction: return .orange
+        case .other: return .secondary
         }
     }
 }

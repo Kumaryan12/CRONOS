@@ -54,13 +54,19 @@ func runSelfTests() throws {
     try require(persisted.count == 1, "SQLite should return the completed session")
     try require(persisted[0].applicationName == "Editor", "SQLite should preserve application identity")
     try require(DatabaseMigrator.currentVersion == 1, "database schema should be at version 1")
+
+    let analytics = DailyAnalyticsEngine().analyze(
+        sessions: persisted,
+        interval: DateInterval(start: base, duration: 24 * 3600)
+    )
+    try require(analytics.activeDuration == 900, "daily analytics should sum active time")
 }
 
 do {
     switch CommandLine.arguments.dropFirst().first {
     case "self-test":
         try runSelfTests()
-        print("Chronos self-test passed: reconstruction, migration, write, and read")
+        print("Chronos self-test passed: reconstruction, persistence, categorization, and analytics")
     case "generate":
         print("Fake-data generation is scheduled for the analytics milestone.")
     default:
