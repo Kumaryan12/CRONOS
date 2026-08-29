@@ -47,6 +47,24 @@ public final class ActivityStore: @unchecked Sendable {
                 ]
             )
 
+            if let bundleID = event.applicationBundleID,
+               let name = event.applicationName {
+                try database.execute(
+                    """
+                    INSERT INTO applications(bundle_id, display_name, category_id, is_excluded, updated_at)
+                    VALUES (?, ?, NULL, 0, ?)
+                    ON CONFLICT(bundle_id) DO UPDATE SET
+                        display_name = excluded.display_name,
+                        updated_at = excluded.updated_at
+                    """,
+                    bindings: [
+                        .text(bundleID),
+                        .text(name),
+                        .real(event.timestamp.timeIntervalSince1970)
+                    ]
+                )
+            }
+
             for session in completedSessions {
                 try insert(session)
             }
@@ -112,9 +130,13 @@ public final class ActivityStore: @unchecked Sendable {
         var sessions: [ActivitySession] = []
         try database.query(
             """
-            SELECT id, started_at, ended_at, application_bundle_id, application_name,
-                   category_id, end_reason, is_uncertain
+            SELECT activity_sessions.id, started_at, ended_at,
+                   activity_sessions.application_bundle_id, application_name,
+                   COALESCE(activity_sessions.category_id, applications.category_id),
+                   end_reason, is_uncertain
             FROM activity_sessions
+            LEFT JOIN applications
+              ON applications.bundle_id = activity_sessions.application_bundle_id
             WHERE ended_at > ? AND started_at < ?
             ORDER BY started_at ASC
             """,
@@ -168,6 +190,55 @@ public final class ActivityStore: @unchecked Sendable {
     public func importSessions(_ sessions: [ActivitySession]) throws {
         try database.transaction {
             for session in sessions { try insert(session) }
+        }
+    }
+
+    public func applicationRules() throws -> [ApplicationRule] {
+        var rules: [ApplicationRule] = []
+        try database.query(
+            """
+            SELECT bundle_id, display_name, category_id, is_excluded
+            FROM applications ORDER BY display_name COLLATE NOCASE
+            """
+        ) { row in
+            guard let bundleID = row.string(at: 0), let name = row.string(at: 1) else { return }
+            rules.append(ApplicationRule(
+                bundleID: bundleID,
+                displayName: name,
+                categoryID: row.string(at: 2),
+                isExcluded: row.integer(at: 3) == 1
+            ))
+        }
+        return rules
+    }
+
+    public func saveApplicationRule(_ rule: ApplicationRule) throws {
+        try database.execute(
+            """
+            INSERT INTO applications(bundle_id, display_name, category_id, is_excluded, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(bundle_id) DO UPDATE SET
+                display_name = excluded.display_name,
+                category_id = excluded.category_id,
+                is_excluded = excluded.is_excluded,
+                updated_at = excluded.updated_at
+            """,
+            bindings: [
+                .text(rule.bundleID),
+                .text(rule.displayName),
+                rule.categoryID.map(SQLiteValue.text) ?? .null,
+                .integer(rule.isExcluded ? 1 : 0),
+                .real(Date().timeIntervalSince1970)
+            ]
+        )
+    }
+
+    public func databaseSize() -> Int64 {
+        let paths = [databaseURL.path, databaseURL.path + "-wal", databaseURL.path + "-shm"]
+        return paths.reduce(0) { total, path in
+            let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)?
+                .int64Value ?? 0
+            return total + size
         }
     }
 

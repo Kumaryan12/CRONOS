@@ -34,4 +34,8 @@ public struct ActivityCategory: Identifiable, Codable, Hashable, Sendable {
         .coding, .study, .research, .writing, .design, .communication,
         .utilities, .entertainment, .gaming, .socialMedia, .uncategorized
     ]
+
+    public static func category(id: String?) -> Self? {
+        defaults.first { $0.id == id }
+    }
 }

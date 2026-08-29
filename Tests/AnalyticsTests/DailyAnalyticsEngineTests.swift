@@ -56,6 +56,37 @@ import Testing
     #expect(!first.isEmpty)
 }
 
+@Test func persistedCategoryOverrideWinsOverDefault() throws {
+    let start = Date(timeIntervalSince1970: 1_700_000_000)
+    var overridden = session("com.spotify.client", "Spotify", start, 30 * 60)
+    overridden.categoryID = ActivityCategory.study.id
+    let analytics = DailyAnalyticsEngine().analyze(
+        sessions: [overridden],
+        interval: DateInterval(start: start, duration: 3600)
+    )
+
+    #expect(analytics.productiveDuration == 30 * 60)
+    #expect(analytics.distractionDuration == 0)
+}
+
+@Test func weeklyAnalyticsBuildsPersonalBaseline() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let end = try #require(calendar.date(from: DateComponents(year: 2024, month: 1, day: 22)))
+    let history = SimulatedDataGenerator(seed: 99, calendar: calendar).generate(days: 21, endingAt: end)
+    let week = try #require(calendar.dateInterval(of: .weekOfYear, for: end))
+    let analytics = WeeklyAnalyticsEngine(calendar: calendar).analyze(
+        sessions: history.filter { $0.endedAt > week.start },
+        weekContaining: end,
+        baselineSessions: history.filter { $0.startedAt < week.start }
+    )
+
+    #expect(analytics.days.count == 7)
+    #expect(analytics.totalActiveDuration > 0)
+    #expect(analytics.totalProductiveDuration > 0)
+    #expect(analytics.baseline != nil)
+}
+
 private func session(
     _ bundleID: String,
     _ name: String,

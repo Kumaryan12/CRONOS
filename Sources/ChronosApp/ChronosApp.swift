@@ -29,6 +29,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var dailyAnalytics = DailyAnalytics.empty(
         for: Calendar.current.dateInterval(of: .day, for: Date())!
     )
+    @Published private(set) var weeklyAnalytics = WeeklyAnalytics.empty(
+        interval: Calendar.current.dateInterval(of: .weekOfYear, for: Date())!
+    )
+    @Published private(set) var todaySessions: [ActivitySession] = []
+    @Published private(set) var applicationRules: [ApplicationRule] = []
+    @Published var dashboardSection: DashboardSection = .today
 
     private let store: ActivityStore?
     private var terminationObserver: NSObjectProtocol?
@@ -37,6 +43,7 @@ final class AppModel: ObservableObject {
 
     private lazy var collector = CollectorCoordinator(
         idleThreshold: idleThresholdMinutes * 60,
+        excludedBundleIDs: Set(applicationRules.filter(\.isExcluded).map(\.bundleID)),
         onSnapshot: { [weak self] in self?.snapshot = $0 },
         onSession: { [weak self] session in
             self?.recentSessions.insert(session, at: 0)
@@ -50,7 +57,7 @@ final class AppModel: ObservableObject {
                     completedSessions: sessions,
                     activeApplication: activeApplication
                 )
-                if !sessions.isEmpty { self?.refreshDailyAnalytics() }
+                if !sessions.isEmpty { self?.refreshAnalytics() }
             } catch {
                 self?.persistenceError = String(describing: error)
             }
@@ -74,7 +81,7 @@ final class AppModel: ObservableObject {
         store = initializedStore
         persistenceError = initializationError
         if let recoveredSession { recentSessions = [recoveredSession] }
-        refreshDailyAnalytics()
+        refreshAnalytics()
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -129,16 +136,48 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func refreshDailyAnalytics(now: Date = Date()) {
+    func saveApplicationRule(_ rule: ApplicationRule) {
+        guard let store else { return }
+        do {
+            try store.saveApplicationRule(rule)
+            if let index = applicationRules.firstIndex(where: { $0.bundleID == rule.bundleID }) {
+                applicationRules[index] = rule
+            } else {
+                applicationRules.append(rule)
+            }
+            applicationRules.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            collector.setExcludedBundleIDs(Set(applicationRules.filter(\.isExcluded).map(\.bundleID)))
+            refreshAnalytics()
+        } catch {
+            persistenceError = String(describing: error)
+        }
+    }
+
+    func refreshAnalytics(now: Date = Date()) {
         guard let interval = Calendar.current.dateInterval(of: .day, for: now),
               let store else { return }
         do {
-            let sessions = try store.sessions(from: interval.start, to: interval.end)
-            dailyAnalytics = DailyAnalyticsEngine().analyze(
-                sessions: sessions,
+            applicationRules = try store.applicationRules()
+            let overrides = Dictionary(uniqueKeysWithValues: applicationRules.compactMap { rule in
+                ActivityCategory.category(id: rule.categoryID).map { (rule.bundleID, $0) }
+            })
+            let categorizer = ApplicationCategorizer(overrides: overrides)
+            todaySessions = try store.sessions(from: interval.start, to: interval.end)
+            dailyAnalytics = DailyAnalyticsEngine(categorizer: categorizer).analyze(
+                sessions: todaySessions,
                 interval: interval
             )
-            recentSessions = Array(sessions.suffix(20).reversed())
+            recentSessions = Array(todaySessions.suffix(20).reversed())
+
+            if let week = Calendar.current.dateInterval(of: .weekOfYear, for: now),
+               let baselineStart = Calendar.current.date(byAdding: .day, value: -14, to: week.start) {
+                let history = try store.sessions(from: baselineStart, to: week.end)
+                weeklyAnalytics = WeeklyAnalyticsEngine(categorizer: categorizer).analyze(
+                    sessions: history.filter { $0.endedAt > week.start },
+                    weekContaining: now,
+                    baselineSessions: history.filter { $0.startedAt < week.start }
+                )
+            }
         } catch {
             persistenceError = String(describing: error)
         }

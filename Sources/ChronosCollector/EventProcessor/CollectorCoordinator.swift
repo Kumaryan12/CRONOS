@@ -25,6 +25,7 @@ public final class CollectorCoordinator {
         SessionReconstructor.ActiveApplication?
     ) -> Void
     private let idleThreshold: TimeInterval
+    private var excludedBundleIDs: Set<String>
 
     private lazy var applicationTracker = ApplicationTracker(handler: handle)
     private lazy var idleTracker = IdleTracker(threshold: idleThreshold, handler: handle)
@@ -34,6 +35,7 @@ public final class CollectorCoordinator {
 
     public init(
         idleThreshold: TimeInterval = 5 * 60,
+        excludedBundleIDs: Set<String> = [],
         onSnapshot: @escaping (Snapshot) -> Void = { _ in },
         onEvent: @escaping (ActivityEvent) -> Void = { _ in },
         onSession: @escaping (ActivitySession) -> Void = { _ in },
@@ -44,6 +46,7 @@ public final class CollectorCoordinator {
         ) -> Void = { _, _, _ in }
     ) {
         self.idleThreshold = idleThreshold
+        self.excludedBundleIDs = excludedBundleIDs
         self.onSnapshot = onSnapshot
         self.onEvent = onEvent
         self.onSession = onSession
@@ -92,10 +95,27 @@ public final class CollectorCoordinator {
         idleTracker.threshold = max(60, threshold)
     }
 
-    private func handle(_ event: ActivityEvent) {
+    public func setExcludedBundleIDs(_ bundleIDs: Set<String>) {
+        excludedBundleIDs = bundleIDs
+    }
+
+    private func handle(_ incomingEvent: ActivityEvent) {
         // Pause is a privacy boundary: do not retain even coarse events until the
         // user explicitly resumes tracking.
-        guard snapshot.isTracking || event.type == .trackingResumed else { return }
+        guard snapshot.isTracking || incomingEvent.type == .trackingResumed else { return }
+        let event: ActivityEvent
+        if incomingEvent.type == .appActivated,
+           let bundleID = incomingEvent.applicationBundleID,
+           excludedBundleIDs.contains(bundleID) {
+            event = ActivityEvent(
+                timestamp: incomingEvent.timestamp,
+                type: .appDeactivated,
+                source: incomingEvent.source,
+                metadata: ["reason": "excluded_application"]
+            )
+        } else {
+            event = incomingEvent
+        }
         onEvent(event)
         let sessions = reconstructor.process(event)
         sessions.forEach(onSession)
@@ -122,7 +142,12 @@ public final class CollectorCoordinator {
             snapshot.currentSessionStartedAt = nil
         case .trackingResumed:
             snapshot.isTracking = true
-        case .appDeactivated, .sessionLocked:
+        case .appDeactivated:
+            if event.metadata["reason"] == "excluded_application" {
+                snapshot.currentApplication = "Excluded application"
+            }
+            snapshot.currentSessionStartedAt = nil
+        case .sessionLocked:
             snapshot.currentSessionStartedAt = nil
         }
         publish()

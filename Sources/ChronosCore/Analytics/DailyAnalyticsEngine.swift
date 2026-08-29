@@ -26,10 +26,10 @@ public struct DailyAnalyticsEngine: Sendable {
         var distraction: TimeInterval = 0
 
         let categorized = clipped.map { session -> (ActivitySession, ActivityCategory) in
-            let category = categorizer.category(
-                bundleID: session.applicationBundleID,
-                applicationName: session.applicationName
-            )
+            let category = ActivityCategory.category(id: session.categoryID) ?? categorizer.category(
+                    bundleID: session.applicationBundleID,
+                    applicationName: session.applicationName
+                )
             categoryTotals[category, default: 0] += session.duration
             let current = applicationTotals[session.applicationBundleID] ?? (session.applicationName, 0)
             applicationTotals[session.applicationBundleID] = (current.0, current.1 + session.duration)
