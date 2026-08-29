@@ -4,6 +4,12 @@ import OSLog
 
 @MainActor
 public final class CollectorCoordinator {
+    private static let defaultSensitiveExclusions: Set<String> = [
+        "com.1password.1password",
+        "com.agilebits.onepassword7",
+        "com.bitwarden.desktop",
+        "com.lastpass.LastPass"
+    ]
     public struct Snapshot: Equatable, Sendable {
         public var currentApplication: String?
         public var currentSessionStartedAt: Date?
@@ -46,7 +52,7 @@ public final class CollectorCoordinator {
         ) -> Void = { _, _, _ in }
     ) {
         self.idleThreshold = idleThreshold
-        self.excludedBundleIDs = excludedBundleIDs
+        self.excludedBundleIDs = excludedBundleIDs.union(Self.defaultSensitiveExclusions)
         self.onSnapshot = onSnapshot
         self.onEvent = onEvent
         self.onSession = onSession
@@ -96,7 +102,14 @@ public final class CollectorCoordinator {
     }
 
     public func setExcludedBundleIDs(_ bundleIDs: Set<String>) {
-        excludedBundleIDs = bundleIDs
+        excludedBundleIDs = bundleIDs.union(Self.defaultSensitiveExclusions)
+        if let active = reconstructor.activeApplication,
+           bundleIDs.contains(active.bundleID) {
+            handle(ActivityEvent(
+                type: .appDeactivated,
+                metadata: ["reason": "excluded_application"]
+            ))
+        }
     }
 
     private func handle(_ incomingEvent: ActivityEvent) {

@@ -4,6 +4,7 @@ public final class ActivityStore: @unchecked Sendable {
     public let databaseURL: URL
     private let database: SQLiteDatabase
     private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
 
     public init(url: URL) throws {
         databaseURL = url
@@ -184,6 +185,7 @@ public final class ActivityStore: @unchecked Sendable {
             try database.execute("DELETE FROM collector_checkpoint")
             try database.execute("DELETE FROM daily_summaries")
             try database.execute("DELETE FROM hourly_summaries")
+            try database.execute("DELETE FROM applications")
         }
     }
 
@@ -240,6 +242,51 @@ public final class ActivityStore: @unchecked Sendable {
                 .int64Value ?? 0
             return total + size
         }
+    }
+
+    public func exportData(from start: Date? = nil, to end: Date? = nil) throws -> Data {
+        let lower = start ?? Date.distantPast
+        let upper = end ?? Date.distantFuture
+        let export = ActivityExport(
+            events: try events(from: lower, to: upper),
+            sessions: try sessions(from: lower, to: upper),
+            applicationRules: try applicationRules()
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(export)
+    }
+
+    private func events(from start: Date, to end: Date) throws -> [ActivityEvent] {
+        var events: [ActivityEvent] = []
+        try database.query(
+            """
+            SELECT id, timestamp, event_type, application_bundle_id,
+                   application_name, source, metadata_json
+            FROM activity_events
+            WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC
+            """,
+            bindings: [.real(start.timeIntervalSince1970), .real(end.timeIntervalSince1970)]
+        ) { row in
+            guard let idString = row.string(at: 0), let id = UUID(uuidString: idString),
+                  let timestamp = row.double(at: 1), let typeRaw = row.string(at: 2),
+                  let type = ActivityEventType(rawValue: typeRaw),
+                  let sourceRaw = row.string(at: 5), let source = ActivitySource(rawValue: sourceRaw) else { return }
+            let metadata = row.data(at: 6).flatMap {
+                try? decoder.decode([String: String].self, from: $0)
+            } ?? [:]
+            events.append(ActivityEvent(
+                id: id,
+                timestamp: Date(timeIntervalSince1970: timestamp),
+                type: type,
+                applicationBundleID: row.string(at: 3),
+                applicationName: row.string(at: 4),
+                source: source,
+                metadata: metadata
+            ))
+        }
+        return events
     }
 
     private func insert(_ session: ActivitySession) throws {

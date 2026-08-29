@@ -2,6 +2,7 @@ import ChronosCollector
 import ChronosCore
 import ServiceManagement
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct ChronosApplication: App {
@@ -34,6 +35,7 @@ final class AppModel: ObservableObject {
     )
     @Published private(set) var todaySessions: [ActivitySession] = []
     @Published private(set) var applicationRules: [ApplicationRule] = []
+    @Published private(set) var privacyMessage: String?
     @Published var dashboardSection: DashboardSection = .today
 
     private let store: ActivityStore?
@@ -148,6 +150,56 @@ final class AppModel: ObservableObject {
             applicationRules.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             collector.setExcludedBundleIDs(Set(applicationRules.filter(\.isExcluded).map(\.bundleID)))
             refreshAnalytics()
+        } catch {
+            persistenceError = String(describing: error)
+        }
+    }
+
+    func deleteToday() {
+        guard let interval = Calendar.current.dateInterval(of: .day, for: Date()) else { return }
+        deleteData(from: interval.start, to: interval.end, label: "Deleted today's activity")
+    }
+
+    func deleteData(from start: Date, to end: Date, label: String = "Deleted selected activity") {
+        guard let store, end > start else { return }
+        if snapshot.isTracking { collector.pause() }
+        do {
+            try store.deleteSessions(from: start, to: end)
+            privacyMessage = label + ". Tracking remains paused."
+            refreshAnalytics()
+        } catch {
+            persistenceError = String(describing: error)
+        }
+    }
+
+    func deleteAllData() {
+        guard let store else { return }
+        if snapshot.isTracking { collector.pause() }
+        do {
+            try store.deleteAll()
+            applicationRules = []
+            collector.setExcludedBundleIDs([])
+            privacyMessage = "Deleted all Chronos activity. Tracking remains paused."
+            refreshAnalytics()
+        } catch {
+            persistenceError = String(describing: error)
+        }
+    }
+
+    func exportAllData() {
+        guard let store else { return }
+        let wasTracking = snapshot.isTracking
+        if wasTracking { collector.pause() }
+        defer { if wasTracking { collector.resume() } }
+        do {
+            let data = try store.exportData()
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.json]
+            panel.canCreateDirectories = true
+            panel.nameFieldStringValue = "chronos-export-\(Date().formatted(.iso8601.year().month().day())).json"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            try data.write(to: url, options: .atomic)
+            privacyMessage = "Exported Chronos data to \(url.lastPathComponent)."
         } catch {
             persistenceError = String(describing: error)
         }

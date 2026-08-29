@@ -37,6 +37,13 @@ public struct SQLiteRow {
         guard sqlite3_column_type(statement, index) != SQLITE_NULL else { return nil }
         return sqlite3_column_int64(statement, index)
     }
+
+    public func data(at index: Int32) -> Data? {
+        guard sqlite3_column_type(statement, index) != SQLITE_NULL,
+              let bytes = sqlite3_column_blob(statement, index) else { return nil }
+        let count = Int(sqlite3_column_bytes(statement, index))
+        return Data(bytes: bytes, count: count)
+    }
 }
 
 public final class SQLiteDatabase: @unchecked Sendable {

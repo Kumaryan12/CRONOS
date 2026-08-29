@@ -21,6 +21,9 @@ struct MenuBarView: View {
             Button(model.snapshot.isTracking ? "Pause Tracking" : "Resume Tracking") {
                 model.toggleTracking()
             }
+            if model.snapshot.isTracking {
+                Button("Enter Privacy Mode") { model.toggleTracking() }
+            }
             if #available(macOS 14.0, *) {
                 SettingsLink()
             } else {
