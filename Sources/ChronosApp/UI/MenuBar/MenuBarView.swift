@@ -2,7 +2,6 @@ import SwiftUI
 
 struct MenuBarView: View {
     @ObservedObject var model: AppModel
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -17,11 +16,17 @@ struct MenuBarView: View {
             Divider()
 
             Button("Open Dashboard") {
-                openWindow(id: "dashboard")
-                NSApp.activate(ignoringOtherApps: true)
+                model.openDashboard()
             }
             Button(model.snapshot.isTracking ? "Pause Tracking" : "Resume Tracking") {
                 model.toggleTracking()
+            }
+            if #available(macOS 14.0, *) {
+                SettingsLink()
+            } else {
+                Button("Settings…") {
+                    NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                }
             }
             Divider()
             Button("Quit Chronos") {

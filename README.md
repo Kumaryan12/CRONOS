@@ -43,6 +43,16 @@ swift run ChronosApp
 swift run chronos-dev self-test
 ```
 
+Build an ad-hoc signed app bundle for local installation:
+
+```sh
+./scripts/build-app.sh
+open dist/Chronos.app
+```
+
+Move `Chronos.app` into `/Applications` before enabling Launch at Login. The app
+starts as a quiet menu-bar agent and opens no dashboard window automatically.
+
 `chronos-dev self-test` verifies reconstruction, migration, transactional writes,
 and reads without launching the UI. Fake-history generation arrives with the
 analytics milestone.

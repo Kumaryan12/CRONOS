@@ -2,8 +2,18 @@ import SwiftUI
 
 struct DashboardView: View {
     @ObservedObject var model: AppModel
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
+        if hasCompletedOnboarding {
+            dashboard
+        } else {
+            FirstRunView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                .frame(minWidth: 760, minHeight: 520)
+        }
+    }
+
+    private var dashboard: some View {
         NavigationSplitView {
             List {
                 Label("Today", systemImage: "sun.max")

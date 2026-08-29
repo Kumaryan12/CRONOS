@@ -24,14 +24,16 @@ public final class CollectorCoordinator {
         [ActivitySession],
         SessionReconstructor.ActiveApplication?
     ) -> Void
+    private let idleThreshold: TimeInterval
 
     private lazy var applicationTracker = ApplicationTracker(handler: handle)
-    private lazy var idleTracker = IdleTracker(handler: handle)
+    private lazy var idleTracker = IdleTracker(threshold: idleThreshold, handler: handle)
     private lazy var screenTracker = ScreenTracker(handler: handle)
     private lazy var sessionTracker = SessionTracker(handler: handle)
     private var snapshot = Snapshot()
 
     public init(
+        idleThreshold: TimeInterval = 5 * 60,
         onSnapshot: @escaping (Snapshot) -> Void = { _ in },
         onEvent: @escaping (ActivityEvent) -> Void = { _ in },
         onSession: @escaping (ActivitySession) -> Void = { _ in },
@@ -41,6 +43,7 @@ public final class CollectorCoordinator {
             SessionReconstructor.ActiveApplication?
         ) -> Void = { _, _, _ in }
     ) {
+        self.idleThreshold = idleThreshold
         self.onSnapshot = onSnapshot
         self.onEvent = onEvent
         self.onSession = onSession
@@ -83,6 +86,10 @@ public final class CollectorCoordinator {
     public func resume() {
         handle(ActivityEvent(type: .trackingResumed))
         applicationTracker.emitCurrentApplication()
+    }
+
+    public func setIdleThreshold(_ threshold: TimeInterval) {
+        idleTracker.threshold = max(60, threshold)
     }
 
     private func handle(_ event: ActivityEvent) {

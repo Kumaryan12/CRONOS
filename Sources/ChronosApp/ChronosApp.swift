@@ -13,11 +13,9 @@ struct ChronosApplication: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Chronos", id: "dashboard") {
-            DashboardView(model: model)
-                .frame(minWidth: 760, minHeight: 520)
+        Settings {
+            SettingsView(model: model)
         }
-        .defaultSize(width: 980, height: 680)
     }
 }
 
@@ -26,11 +24,16 @@ final class AppModel: ObservableObject {
     @Published private(set) var snapshot = CollectorCoordinator.Snapshot()
     @Published private(set) var recentSessions: [ActivitySession] = []
     @Published private(set) var persistenceError: String?
+    @Published private(set) var launchAtLogin = false
+    @Published private(set) var lifecycleError: String?
 
     private let store: ActivityStore?
     private var terminationObserver: NSObjectProtocol?
+    private var dashboardWindow: NSWindow?
+    private var idleThresholdMinutes: Double
 
     private lazy var collector = CollectorCoordinator(
+        idleThreshold: idleThresholdMinutes * 60,
         onSnapshot: { [weak self] in self?.snapshot = $0 },
         onSession: { [weak self] session in
             self?.recentSessions.insert(session, at: 0)
@@ -51,6 +54,9 @@ final class AppModel: ObservableObject {
     )
 
     init() {
+        let storedThreshold = UserDefaults.standard.double(forKey: "idleThresholdMinutes")
+        idleThresholdMinutes = storedThreshold > 0 ? storedThreshold : 5
+        launchAtLogin = LoginItemManager.isEnabled
         var initializedStore: ActivityStore?
         var recoveredSession: ActivitySession?
         var initializationError: String?
@@ -80,5 +86,41 @@ final class AppModel: ObservableObject {
 
     func shutdown() {
         collector.stop()
+    }
+
+    func openDashboard() {
+        if dashboardWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 980, height: 680),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Chronos"
+            window.minSize = NSSize(width: 760, height: 520)
+            window.isReleasedWhenClosed = false
+            window.contentView = NSHostingView(rootView: DashboardView(model: self))
+            window.center()
+            dashboardWindow = window
+        }
+        dashboardWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func updateIdleThreshold(minutes: Double) {
+        idleThresholdMinutes = minutes
+        UserDefaults.standard.set(minutes, forKey: "idleThresholdMinutes")
+        collector.setIdleThreshold(minutes * 60)
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            try LoginItemManager.setEnabled(enabled)
+            launchAtLogin = LoginItemManager.isEnabled
+            lifecycleError = nil
+        } catch {
+            launchAtLogin = LoginItemManager.isEnabled
+            lifecycleError = String(describing: error)
+        }
     }
 }
