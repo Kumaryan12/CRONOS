@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var model: AppModel
     @AppStorage("idleThresholdMinutes") private var idleThresholdMinutes = 5.0
-    @AppStorage("collectWindowTitles") private var collectWindowTitles = false
 
     var body: some View {
         Form {
@@ -26,8 +25,9 @@ struct SettingsView: View {
                         .frame(width: 52, alignment: .trailing)
                 }
 
-                Toggle("Collect window titles", isOn: $collectWindowTitles)
-                Text("Window-title collection is off by default and is not yet enabled in the collector.")
+                Toggle("Collect window titles", isOn: .constant(false))
+                    .disabled(true)
+                Text("Chronos V1 never collects window titles.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

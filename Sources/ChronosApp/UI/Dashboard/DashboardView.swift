@@ -45,7 +45,10 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
-            FirstRunView(hasCompletedOnboarding: $hasCompletedOnboarding)
+            FirstRunView(
+                hasCompletedOnboarding: $hasCompletedOnboarding,
+                onStart: model.completeOnboarding
+            )
                 .frame(minWidth: 760, minHeight: 520)
         }
     }

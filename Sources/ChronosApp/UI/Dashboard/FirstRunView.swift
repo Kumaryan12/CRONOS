@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FirstRunView: View {
     @Binding var hasCompletedOnboarding: Bool
+    let onStart: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -22,7 +23,10 @@ struct FirstRunView: View {
                 privacyLine("Window-title tracking is off by default")
             }
 
-            Button("Start Tracking") { hasCompletedOnboarding = true }
+            Button("Start Tracking") {
+                onStart()
+                hasCompletedOnboarding = true
+            }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
         }

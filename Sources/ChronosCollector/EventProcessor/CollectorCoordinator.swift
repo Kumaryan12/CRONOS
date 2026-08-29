@@ -147,8 +147,10 @@ public final class CollectorCoordinator {
         case .screenSleep:
             snapshot.isScreenAwake = false
             snapshot.currentSessionStartedAt = nil
+            idleTracker.stop()
         case .screenWake, .sessionUnlocked:
             snapshot.isScreenAwake = true
+            idleTracker.start()
             applicationTracker.emitCurrentApplication(at: event.timestamp)
         case .trackingPaused:
             snapshot.isTracking = false
@@ -162,6 +164,7 @@ public final class CollectorCoordinator {
             snapshot.currentSessionStartedAt = nil
         case .sessionLocked:
             snapshot.currentSessionStartedAt = nil
+            idleTracker.stop()
         }
         publish()
 

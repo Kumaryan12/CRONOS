@@ -1,5 +1,6 @@
 import ChronosCollector
 import ChronosCore
+import Darwin
 import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
@@ -36,12 +37,19 @@ final class AppModel: ObservableObject {
     @Published private(set) var todaySessions: [ActivitySession] = []
     @Published private(set) var applicationRules: [ApplicationRule] = []
     @Published private(set) var privacyMessage: String?
+    @Published private(set) var diagnostics = DiagnosticsSnapshot()
     @Published var dashboardSection: DashboardSection = .today
 
     private let store: ActivityStore?
     private var terminationObserver: NSObjectProtocol?
     private var dashboardWindow: NSWindow?
     private var idleThresholdMinutes: Double
+    private let diagnosticsStartedAt = Date()
+    private var eventCount = 0
+    private var completedSessionCount = 0
+    private var databaseWriteCount = 0
+    private var analyticsExecutionCount = 0
+    private var lastCPUSample: (date: Date, seconds: Double)?
 
     private lazy var collector = CollectorCoordinator(
         idleThreshold: idleThresholdMinutes * 60,
@@ -59,7 +67,11 @@ final class AppModel: ObservableObject {
                     completedSessions: sessions,
                     activeApplication: activeApplication
                 )
+                self?.eventCount += 1
+                self?.databaseWriteCount += 1
+                self?.completedSessionCount += sessions.count
                 if !sessions.isEmpty { self?.refreshAnalytics() }
+                self?.refreshDiagnostics()
             } catch {
                 self?.persistenceError = String(describing: error)
             }
@@ -136,6 +148,10 @@ final class AppModel: ObservableObject {
             launchAtLogin = LoginItemManager.isEnabled
             lifecycleError = String(describing: error)
         }
+    }
+
+    func completeOnboarding() {
+        setLaunchAtLogin(true)
     }
 
     func saveApplicationRule(_ rule: ApplicationRule) {
@@ -230,8 +246,56 @@ final class AppModel: ObservableObject {
                     baselineSessions: history.filter { $0.startedAt < week.start }
                 )
             }
+            analyticsExecutionCount += 1
+            refreshDiagnostics(lastAggregation: now)
         } catch {
             persistenceError = String(describing: error)
         }
+    }
+
+    func refreshDiagnostics(lastAggregation: Date? = nil) {
+        let now = Date()
+        let uptime = max(1, now.timeIntervalSince(diagnosticsStartedAt))
+        let cpuSeconds = processCPUTime()
+        var cpuPercent = diagnostics.collectorCPUPercent
+        if let previous = lastCPUSample {
+            let wall = now.timeIntervalSince(previous.date)
+            if wall > 0 { cpuPercent = max(0, (cpuSeconds - previous.seconds) / wall * 100) }
+        }
+        lastCPUSample = (now, cpuSeconds)
+        diagnostics = DiagnosticsSnapshot(
+            collectorCPUPercent: cpuPercent,
+            memoryBytes: residentMemory(),
+            eventsProcessed: eventCount,
+            sessionsCompleted: completedSessionCount,
+            databaseWrites: databaseWriteCount,
+            analyticsExecutions: analyticsExecutionCount,
+            databaseBytes: store?.databaseSize() ?? 0,
+            eventsPerHour: Double(eventCount) / uptime * 3600,
+            writesPerHour: Double(databaseWriteCount) / uptime * 3600,
+            collectorUptime: uptime,
+            lastAggregation: lastAggregation ?? diagnostics.lastAggregation
+        )
+    }
+
+    private func processCPUTime() -> Double {
+        var usage = rusage()
+        guard getrusage(RUSAGE_SELF, &usage) == 0 else { return 0 }
+        let user = Double(usage.ru_utime.tv_sec) + Double(usage.ru_utime.tv_usec) / 1_000_000
+        let system = Double(usage.ru_stime.tv_sec) + Double(usage.ru_stime.tv_usec) / 1_000_000
+        return user + system
+    }
+
+    private func residentMemory() -> UInt64 {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<mach_task_basic_info_data_t>.size / MemoryLayout<natural_t>.size
+        )
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? UInt64(info.resident_size) : 0
     }
 }

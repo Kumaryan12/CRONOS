@@ -23,6 +23,6 @@ interruption quality decreases to zero at 12 distracting interruptions. A score
 is not shown when active time is insufficient.
 
 Focus sessions require sustained productive activity, tolerate only short neutral
-gaps, and reject runs with excessive switching or distraction. Baselines compare
-the user only with their own 7-, 14-, or 30-day history and can match weekdays.
-Correlations always display sample size and never claim causation.
+gaps, and reject runs with excessive switching or distraction. The V1 weekly view
+compares observed days with the user's prior 14 active days and displays sample size.
+Future correlations will always display sample size and never claim causation.

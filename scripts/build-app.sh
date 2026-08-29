@@ -13,6 +13,7 @@ rm -rf "${app_bundle}"
 mkdir -p "${app_bundle}/Contents/MacOS" "${app_bundle}/Contents/Resources"
 cp "${binary_dir}/ChronosApp" "${app_bundle}/Contents/MacOS/Chronos"
 cp "${project_root}/Resources/Info.plist" "${app_bundle}/Contents/Info.plist"
-codesign --force --deep --sign - "${app_bundle}"
+cp "${project_root}/Resources/Chronos.icns" "${app_bundle}/Contents/Resources/Chronos.icns"
+codesign --force --deep --options runtime --timestamp=none --sign - "${app_bundle}"
 
 echo "Built ${app_bundle}"

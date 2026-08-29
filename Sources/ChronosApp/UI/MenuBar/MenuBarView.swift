@@ -9,9 +9,13 @@ struct MenuBarView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            LabeledContent("Current application", value: model.snapshot.currentApplication ?? "None")
-            LabeledContent("Idle", value: model.snapshot.isIdle ? "Yes" : "No")
-            LabeledContent("Screen", value: model.snapshot.isScreenAwake ? "Awake" : "Asleep")
+            LabeledContent("Productive", value: chronosDuration(model.dailyAnalytics.productiveDuration))
+            LabeledContent("Distraction", value: chronosDuration(model.dailyAnalytics.distractionDuration))
+            LabeledContent("Focus Score", value: model.dailyAnalytics.focusScore.map { String($0.score) } ?? "—")
+            LabeledContent("Current", value: model.snapshot.currentApplication ?? "None")
+            if let started = model.snapshot.currentSessionStartedAt {
+                LabeledContent("Session started", value: started.formatted(date: .omitted, time: .shortened))
+            }
 
             Divider()
 

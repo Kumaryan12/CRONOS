@@ -8,9 +8,11 @@ Chronos treats wake-ups as a product metric.
 - No AI runs in the collector.
 - Idle detection reads the system idle counter every 30 seconds by default; the
   dispatch timer has tolerance and writes only when idle state changes.
-- Events and completed sessions are committed transactionally. Deeper analytics
-  run lazily and cached summaries are updated incrementally.
-- Trackers suspend unnecessary work while the display or user session is inactive.
+- The idle timer stops while the screen or user session is inactive.
+- Events and completed sessions are committed in one transaction per boundary.
+- Dashboard analytics recompute only bounded current-day/current-week windows when
+  a session closes; the collector performs no continuous analytics.
+- The diagnostics timer exists only while its page is visible.
 
 Developer diagnostics expose event and write rates, aggregation count, database
 size, CPU, and memory so these claims can be measured with Instruments and
