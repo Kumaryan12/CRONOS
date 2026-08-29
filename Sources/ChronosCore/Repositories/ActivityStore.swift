@@ -165,6 +165,12 @@ public final class ActivityStore: @unchecked Sendable {
         }
     }
 
+    public func importSessions(_ sessions: [ActivitySession]) throws {
+        try database.transaction {
+            for session in sessions { try insert(session) }
+        }
+    }
+
     private func insert(_ session: ActivitySession) throws {
         try database.execute(
             """

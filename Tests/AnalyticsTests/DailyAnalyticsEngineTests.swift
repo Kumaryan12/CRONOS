@@ -45,6 +45,17 @@ import Testing
     #expect(categorizer.category(bundleID: "com.valvesoftware.steam", applicationName: "Steam") == .gaming)
 }
 
+@Test func simulatedHistoryIsDeterministicForSeed() {
+    let end = Date(timeIntervalSince1970: 1_700_000_000)
+    let first = SimulatedDataGenerator(seed: 123).generate(days: 30, endingAt: end)
+    let second = SimulatedDataGenerator(seed: 123).generate(days: 30, endingAt: end)
+    let different = SimulatedDataGenerator(seed: 124).generate(days: 30, endingAt: end)
+
+    #expect(first == second)
+    #expect(first != different)
+    #expect(!first.isEmpty)
+}
+
 private func session(
     _ bundleID: String,
     _ name: String,

@@ -60,6 +60,33 @@ func runSelfTests() throws {
         interval: DateInterval(start: base, duration: 24 * 3600)
     )
     try require(analytics.activeDuration == 900, "daily analytics should sum active time")
+
+    let firstGeneration = SimulatedDataGenerator(seed: 7).generate(days: 7, endingAt: base)
+    let secondGeneration = SimulatedDataGenerator(seed: 7).generate(days: 7, endingAt: base)
+    try require(firstGeneration == secondGeneration, "seeded fake history should be deterministic")
+}
+
+func option(_ name: String, in arguments: [String]) -> String? {
+    guard let index = arguments.firstIndex(of: name), arguments.indices.contains(index + 1) else {
+        return nil
+    }
+    return arguments[index + 1]
+}
+
+func generateHistory(arguments: [String]) throws {
+    let days = Int(option("--days", in: arguments) ?? "30") ?? 30
+    let seed = UInt64(option("--seed", in: arguments) ?? "42") ?? 42
+    guard (1...365).contains(days) else {
+        throw SelfTestFailure.assertion("--days must be between 1 and 365")
+    }
+    let output = option("--output", in: arguments) ?? ".build/chronos-simulated.sqlite"
+    let url = URL(fileURLWithPath: output, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        .standardizedFileURL
+    let sessions = SimulatedDataGenerator(seed: seed).generate(days: days)
+    let store = try ActivityStore(url: url)
+    try store.importSessions(sessions)
+    print("Generated \(sessions.count) deterministic sessions across \(days) days")
+    print("Database: \(url.path)")
 }
 
 do {
@@ -68,7 +95,7 @@ do {
         try runSelfTests()
         print("Chronos self-test passed: reconstruction, persistence, categorization, and analytics")
     case "generate":
-        print("Fake-data generation is scheduled for the analytics milestone.")
+        try generateHistory(arguments: Array(CommandLine.arguments.dropFirst(2)))
     default:
         print("Usage: chronos-dev self-test | generate --days <count> --seed <seed>")
     }

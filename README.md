@@ -54,8 +54,13 @@ Move `Chronos.app` into `/Applications` before enabling Launch at Login. The app
 starts as a quiet menu-bar agent and opens no dashboard window automatically.
 
 `chronos-dev self-test` verifies reconstruction, migration, transactional writes,
-and reads without launching the UI. Fake-history generation arrives with the
-analytics milestone.
+categorization, and analytics without launching the UI. Generate a realistic,
+repeatable local dataset without touching the production database:
+
+```sh
+swift run chronos-dev generate --days 30 --seed 42
+# writes .build/chronos-simulated.sqlite by default
+```
 
 ## Roadmap
 
