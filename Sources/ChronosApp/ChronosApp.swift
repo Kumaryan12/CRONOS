@@ -82,6 +82,19 @@ final class AppModel: ObservableObject {
         let storedThreshold = UserDefaults.standard.double(forKey: "idleThresholdMinutes")
         idleThresholdMinutes = storedThreshold > 0 ? storedThreshold : 5
         launchAtLogin = LoginItemManager.isEnabled
+        if Bundle.main.bundleURL.path == "/Applications/Chronos.app",
+           !UserDefaults.standard.bool(forKey: "didRequestLaunchAtLogin") {
+            do {
+                try LoginItemManager.setEnabled(true)
+                launchAtLogin = LoginItemManager.isEnabled
+                if LoginItemManager.status == .requiresApproval {
+                    lifecycleError = "Approve Chronos in System Settings → General → Login Items."
+                }
+            } catch {
+                lifecycleError = String(describing: error)
+            }
+            UserDefaults.standard.set(true, forKey: "didRequestLaunchAtLogin")
+        }
         var initializedStore: ActivityStore?
         var recoveredSession: ActivitySession?
         var initializationError: String?

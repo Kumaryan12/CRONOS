@@ -2,8 +2,10 @@ import ServiceManagement
 
 @MainActor
 enum LoginItemManager {
+    static var status: SMAppService.Status { SMAppService.mainApp.status }
+
     static var isEnabled: Bool {
-        SMAppService.mainApp.status == .enabled
+        status == .enabled
     }
 
     static func setEnabled(_ enabled: Bool) throws {
