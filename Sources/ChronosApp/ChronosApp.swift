@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 
 @main
 struct ChronosApplication: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
 
     var body: some Scene {
@@ -42,6 +43,7 @@ final class AppModel: ObservableObject {
 
     private let store: ActivityStore?
     private var terminationObserver: NSObjectProtocol?
+    private var dashboardObserver: NSObjectProtocol?
     private var dashboardWindow: NSWindow?
     private var idleThresholdMinutes: Double
     private let diagnosticsStartedAt = Date()
@@ -115,6 +117,13 @@ final class AppModel: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.shutdown() }
+        }
+        dashboardObserver = NotificationCenter.default.addObserver(
+            forName: .chronosOpenDashboard,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.openDashboard() }
         }
         DispatchQueue.main.async { [weak self] in self?.collector.start() }
     }
